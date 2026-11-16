@@ -38,7 +38,7 @@
                     android:id="@+id/tvHeaderSubtitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Ubah video panjang menjadi klip Reels &amp; Shorts 9:16"
+                    android:text="Klip Reels &amp; Shorts 1080p HD + Auto Subtitle"
                     android:textColor="#8E9BB5"
                     android:textSize="12sp" />
             </LinearLayout>
@@ -49,7 +49,7 @@
                 android:background="@drawable/bg_chip_dark"
                 android:paddingHorizontal="12dp"
                 android:paddingVertical="6dp"
-                android:text="9:16 PRO"
+                android:text="1080P HD"
                 android:textColor="#00E5FF"
                 android:textSize="11sp"
                 android:textStyle="bold" />
@@ -95,7 +95,7 @@
                 android:textSize="12sp" />
         </LinearLayout>
 
-        <!-- Kotak Preview Video (Muncul setelah video dipilih) -->
+        <!-- Kotak Preview Video -->
         <LinearLayout
             android:id="@+id/cardVideoPlayer"
             android:layout_width="match_parent"
@@ -257,7 +257,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="3. Format Layar Vertikal (9:16)"
+                android:text="3. Format Layar Vertikal (1080x1920 HD)"
                 android:textColor="#A7B5CE"
                 android:textSize="12sp"
                 android:textStyle="bold" />
@@ -290,6 +290,45 @@
                     android:textColor="#FFFFFF"
                     android:textSize="13sp" />
             </RadioGroup>
+
+            <!-- Sakelar Subtitle Otomatis -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_chip_dark"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="12dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Subtitle Otomatis (AI)"
+                        android:textColor="#FFFFFF"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvSubtitleHint"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Tempel teks ucapan otomatis di video"
+                        android:textColor="#8E9BB5"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchAutoSubtitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- Tombol Utama Analisa -->
