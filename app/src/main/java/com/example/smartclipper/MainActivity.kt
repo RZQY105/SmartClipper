@@ -12,6 +12,7 @@ import android.widget.Toast
 import android.widget.VideoView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -28,6 +29,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rgMode: RadioGroup
     private lateinit var rgDuration: RadioGroup
     private lateinit var rgRatio: RadioGroup
+    private lateinit var switchAutoSubtitle: SwitchCompat
+    private lateinit var tvSubtitleHint: TextView
     private lateinit var btnAnalyze: TextView
     private lateinit var layoutProgress: LinearLayout
     private lateinit var tvProgressStatus: TextView
@@ -37,6 +40,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rvScenes: RecyclerView
 
     private lateinit var analyzer: SmartSceneAnalyzer
+    private lateinit var subtitleGenerator: AudioSubtitleGenerator
     private var selectedVideoUri: Uri? = null
     private val detectedScenes = mutableListOf<VideoScene>()
     private lateinit var sceneAdapter: SceneAdapter
@@ -55,6 +59,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         analyzer = SmartSceneAnalyzer(this)
+        subtitleGenerator = AudioSubtitleGenerator(this)
 
         cardVideoPicker = findViewById(R.id.cardVideoPicker)
         cardVideoPlayer = findViewById(R.id.cardVideoPlayer)
@@ -64,6 +69,8 @@ class MainActivity : AppCompatActivity() {
         rgMode = findViewById(R.id.rgMode)
         rgDuration = findViewById(R.id.rgDuration)
         rgRatio = findViewById(R.id.rgRatio)
+        switchAutoSubtitle = findViewById(R.id.switchAutoSubtitle)
+        tvSubtitleHint = findViewById(R.id.tvSubtitleHint)
         btnAnalyze = findViewById(R.id.btnAnalyze)
         layoutProgress = findViewById(R.id.layoutProgress)
         tvProgressStatus = findViewById(R.id.tvProgressStatus)
@@ -71,6 +78,18 @@ class MainActivity : AppCompatActivity() {
         tvSceneCount = findViewById(R.id.tvSceneCount)
         btnExportAll = findViewById(R.id.btnExportAll)
         rvScenes = findViewById(R.id.rvScenes)
+
+        switchAutoSubtitle.setOnCheckedChangeListener { _, isChecked ->
+            tvSubtitleHint.text = if (isChecked) {
+                if (subtitleGenerator.isModelReady()) {
+                    "Aktif • Bahasa Indonesia siap digunakan"
+                } else {
+                    "Aktif • Paket suara AI (42 MB) akan diunduh saat export"
+                }
+            } else {
+                "Tempel teks ucapan otomatis di video"
+            }
+        }
 
         sceneAdapter = SceneAdapter(
             scenes = detectedScenes,
@@ -179,15 +198,26 @@ class MainActivity : AppCompatActivity() {
 
     private fun exportSingleScene(scene: VideoScene) {
         val uri = selectedVideoUri ?: return
+        val useSubtitle = switchAutoSubtitle.isChecked
+
         layoutProgress.visibility = View.VISIBLE
-        tvProgressStatus.text = "Merender Scene #${scene.index} ke format 9:16..."
+        tvProgressStatus.text = "Menyiapkan Scene #${scene.index}..."
 
         lifecycleScope.launch {
             try {
-                val savedName = analyzer.exportSceneToGallery(uri, scene, isFullCropMode())
+                val subtitles = if (useSubtitle) {
+                    subtitleGenerator.generateSubtitlesForClip(uri, scene.startMs, scene.endMs) { status ->
+                        runOnUiThread { tvProgressStatus.text = status }
+                    }
+                } else {
+                    emptyList()
+                }
+
+                tvProgressStatus.text = "Merender Full HD 1080p (9:16)..."
+                val savedName = analyzer.exportSceneToGallery(uri, scene, isFullCropMode(), subtitles)
                 Toast.makeText(
                     this@MainActivity,
-                    "Tersimpan di Galeri (Movies/SmartClipper): $savedName",
+                    "Tersimpan Full HD di Galeri (Movies/SmartClipper): $savedName",
                     Toast.LENGTH_LONG
                 ).show()
             } catch (e: Exception) {
@@ -201,6 +231,7 @@ class MainActivity : AppCompatActivity() {
     private fun exportAllScenes() {
         val uri = selectedVideoUri ?: return
         if (detectedScenes.isEmpty()) return
+        val useSubtitle = switchAutoSubtitle.isChecked
 
         layoutProgress.visibility = View.VISIBLE
         btnExportAll.isEnabled = false
@@ -209,13 +240,24 @@ class MainActivity : AppCompatActivity() {
             var successCount = 0
             try {
                 for ((idx, scene) in detectedScenes.withIndex()) {
-                    tvProgressStatus.text = "Merender Scene ${idx + 1} dari ${detectedScenes.size} (9:16)..."
-                    analyzer.exportSceneToGallery(uri, scene, isFullCropMode())
+                    val subtitles = if (useSubtitle) {
+                        subtitleGenerator.generateSubtitlesForClip(uri, scene.startMs, scene.endMs) { status ->
+                            runOnUiThread {
+                                tvProgressStatus.text = "[${idx + 1}/${detectedScenes.size}] $status"
+                            }
+                        }
+                    } else {
+                        emptyList()
+                    }
+
+                    tvProgressStatus.text =
+                        "Merender Full HD Scene ${idx + 1} dari ${detectedScenes.size}..."
+                    analyzer.exportSceneToGallery(uri, scene, isFullCropMode(), subtitles)
                     successCount++
                 }
                 Toast.makeText(
                     this@MainActivity,
-                    "Selesai! $successCount klip tersimpan di Galeri (Movies/SmartClipper)",
+                    "Selesai! $successCount klip Full HD tersimpan di Galeri (Movies/SmartClipper)",
                     Toast.LENGTH_LONG
                 ).show()
             } catch (e: Exception) {
