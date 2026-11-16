@@ -2,6 +2,8 @@ package com.example.smartclipper
 
 import android.content.ContentValues
 import android.content.Context
+import android.graphics.Color
+import android.graphics.Typeface
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
@@ -10,16 +12,30 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.BackgroundColorSpan
+import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
 import androidx.annotation.OptIn
+import androidx.media3.common.Effect
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.effect.OverlayEffect
+import androidx.media3.effect.OverlaySettings
 import androidx.media3.effect.Presentation
+import androidx.media3.effect.StaticOverlaySettings
+import androidx.media3.effect.TextOverlay
 import androidx.media3.transformer.Composition
+import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.Effects
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
+import androidx.media3.transformer.VideoEncoderSettings
+import com.google.common.collect.ImmutableList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -216,7 +232,8 @@ class SmartSceneAnalyzer(private val context: Context) {
     suspend fun exportSceneToGallery(
         sourceUri: Uri,
         scene: VideoScene,
-        fullCropVertical: Boolean
+        fullCropVertical: Boolean,
+        subtitles: List<SubtitleSegment> = emptyList()
     ): String {
         val tempFile = File(context.cacheDir, "clip_${System.currentTimeMillis()}.mp4")
         if (tempFile.exists()) tempFile.delete()
@@ -239,14 +256,72 @@ class SmartSceneAnalyzer(private val context: Context) {
                     Presentation.LAYOUT_SCALE_TO_FIT
                 }
 
-                val presentation = Presentation.createForAspectRatio(9f / 16f, layoutMode)
-                val effects = Effects(emptyList(), listOf(presentation))
+                // Kunci resolusi Full HD 1080x1920 agar tetap tajam
+                val presentation = Presentation.createForWidthAndHeight(1080, 1920, layoutMode)
+                val videoEffects = mutableListOf<Effect>(presentation)
 
+                if (subtitles.isNotEmpty()) {
+                    val textOverlay = object : TextOverlay() {
+                        override fun getText(presentationTimeUs: Long): SpannableString {
+                            val activeText = subtitles.firstOrNull {
+                                presentationTimeUs in it.startUs..it.endUs
+                            }?.text ?: ""
+
+                            if (activeText.isEmpty()) return SpannableString("")
+
+                            val spannable = SpannableString(" $activeText ")
+                            spannable.setSpan(
+                                ForegroundColorSpan(Color.WHITE),
+                                0,
+                                spannable.length,
+                                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            )
+                            spannable.setSpan(
+                                BackgroundColorSpan(Color.argb(200, 12, 16, 24)),
+                                0,
+                                spannable.length,
+                                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            )
+                            spannable.setSpan(
+                                StyleSpan(Typeface.BOLD),
+                                0,
+                                spannable.length,
+                                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            )
+                            spannable.setSpan(
+                                RelativeSizeSpan(1.45f),
+                                0,
+                                spannable.length,
+                                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            )
+                            return spannable
+                        }
+
+                        override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {
+                            return StaticOverlaySettings.Builder()
+                                .setBackgroundFrameAnchor(0f, -0.60f)
+                                .setOverlayFrameAnchor(0f, -0.60f)
+                                .build()
+                        }
+                    }
+                    videoEffects.add(OverlayEffect(ImmutableList.of(textOverlay)))
+                }
+
+                val effects = Effects(emptyList(), videoEffects)
                 val editedMediaItem = EditedMediaItem.Builder(mediaItem)
                     .setEffects(effects)
                     .build()
 
+                // Bitrate tinggi 10 Mbps mencegah gambar pecah/buram
+                val encoderSettings = VideoEncoderSettings.Builder()
+                    .setBitrate(10_000_000)
+                    .build()
+                val encoderFactory = DefaultEncoderFactory.Builder(context)
+                    .setRequestedVideoEncoderSettings(encoderSettings)
+                    .build()
+
                 val transformer = Transformer.Builder(context)
+                    .setEncoderFactory(encoderFactory)
                     .addListener(object : Transformer.Listener {
                         override fun onCompleted(composition: Composition, exportResult: ExportResult) {
                             if (continuation.isActive) continuation.resume(Unit)
@@ -271,7 +346,7 @@ class SmartSceneAnalyzer(private val context: Context) {
         }
 
         return withContext(Dispatchers.IO) {
-            val fileName = "SmartClip_Scene${scene.index}_${System.currentTimeMillis()}.mp4"
+            val fileName = "SmartClip_HD_Scene${scene.index}_${System.currentTimeMillis()}.mp4"
             saveFileToGallery(tempFile, fileName)
             tempFile.delete()
             fileName
