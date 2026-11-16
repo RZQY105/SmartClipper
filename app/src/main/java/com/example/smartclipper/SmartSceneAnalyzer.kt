@@ -25,7 +25,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.OverlaySettings
 import androidx.media3.effect.Presentation
-import androidx.media3.effect.StaticOverlaySettings
 import androidx.media3.effect.TextOverlay
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.DefaultEncoderFactory
@@ -298,7 +297,7 @@ class SmartSceneAnalyzer(private val context: Context) {
                         }
 
                         override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {
-                            return StaticOverlaySettings.Builder()
+                            return OverlaySettings.Builder()
                                 .setBackgroundFrameAnchor(0f, -0.60f)
                                 .setOverlayFrameAnchor(0f, -0.60f)
                                 .build()
